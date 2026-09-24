@@ -386,7 +386,7 @@ namespace GameServer
                             try
                             {
                                 string reqCode = msg.Split(':')[1].Trim();
-                                if (_roomManager.ContainsKey(reqCode))
+                                if (_roomManager[reqCode].HostIP == ip)
                                 {
                                     // Bắn lệnh báo hiệu cho cả phòng biết
                                     BroadcastToRoom(reqCode, $"GAME_STARTED:{reqCode}");
@@ -394,7 +394,13 @@ namespace GameServer
                                     // Chỉ chạy 1 Vòng Lặp duy nhất cho 1 phòng
                                     _ = Task.Run(() => StartGameLoop(reqCode));
 
-                                    Log($"[GAME] Phòng {reqCode} ĐÃ BẮT ĐẦU VÀO TRẬN!");
+                                    Log($"[GAME] Host ({ip}) ĐÃ BẮT ĐẦU VÀO TRẬN phòng {reqCode}!");
+                                }
+                                else
+                                {
+                                    // Nếu không phải Host mà dám bấm Play thì block luôn
+                                    Log($"[CẢNH BÁO] {ip} bấm Play phòng {reqCode} nhưng KHÔNG PHẢI LÀ HOST!");
+                                    // Nếu thích thì bắn thêm câu chửi về cho nó: SendToClient(stream, "NOT_HOST");
                                 }
                             }
                             catch (Exception ex)
