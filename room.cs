@@ -18,5 +18,7 @@ namespace GameServer
         public string CurrentAnswer { get; set; } = "";     // Lưu đáp án đúng của câu hiện tại
         public DateTime QuestionStartTime { get; set; }       // Lưu mốc thời gian bắt đầu câu hỏi
         public bool IsAcceptingAnswers { get; set; } = false;
+
+        
     }
 }

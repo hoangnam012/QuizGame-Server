@@ -227,6 +227,10 @@ namespace GameServer
 
                     while (client.Connected)
                     {
+                        if (client.Client.Poll(0, SelectMode.SelectRead) && client.Client.Available == 0)
+                        {
+                            break; 
+                        }
                         if (stream.DataAvailable)
                         {
                             int bytes = await stream.ReadAsync(buffer, 0, buffer.Length);
@@ -249,6 +253,22 @@ namespace GameServer
                         _activePeers = Math.Max(0, _activePeers - 1);
                         lblPeersCount.Text = _activePeers.ToString();
                         Log($"[DISC] Client {ip} đã ngắt kết nối.");
+
+                        string roomToRemove = "";
+                        foreach (var r in _roomManager)
+                        {
+                            if (r.Value.HostIP == ip)
+                            {
+                                roomToRemove = r.Key;
+                                break;
+                            }
+                        }
+
+                        if (roomToRemove != "")
+                        {
+                            _roomManager.Remove(roomToRemove);
+                            Log($"[ROOM] Đã giải tán phòng {roomToRemove} vì Host đã thoát game!");
+                        }
                     });
                 }
             });
@@ -378,6 +398,48 @@ namespace GameServer
                         {
                             row.Cells[6].Value = msg.Substring(7).Trim();
                         }
+                        else if (msg.StartsWith("ANSWER:"))
+                        {
+                            // msg từ Unity gửi lên có dạng: ANSWER:111111:nam:2
+                            string[] parts = msg.Split(':');
+                            if (parts.Length == 4)
+                            {
+                                string ansRoomCode = parts[1];
+                                string ansUser = parts[2];
+                                string ansIndex = parts[3];
+
+                                if (_roomManager.ContainsKey(ansRoomCode))
+                                {
+                                    Room r = _roomManager[ansRoomCode];
+
+                                    // 1. Chỉ nhận đáp án nếu đồng hồ 10s vẫn đang đếm
+                                    if (r.IsAcceptingAnswers)
+                                    {
+                                        // 2. Tạo giỏ điểm nếu người chơi này chưa có
+                                        if (!r.PlayerScores.ContainsKey(ansUser))
+                                        {
+                                            r.PlayerScores[ansUser] = 0;
+                                        }
+
+                                        // 3. SO SÁNH ĐÁP ÁN ĐÚNG/SAI
+                                        if (ansIndex.Trim() == r.CurrentAnswer.Trim())
+                                        {
+                                            // Tính thời gian chênh lệch để cộng điểm Kahoot
+                                            double timeTaken = (DateTime.Now - r.QuestionStartTime).TotalSeconds;
+                                            int pointsToAdd = 1000 - (int)(timeTaken * 100);
+                                            if (pointsToAdd < 100) pointsToAdd = 100;
+
+                                            r.PlayerScores[ansUser] += pointsToAdd;
+                                            Log($"[GAME] {ansUser} ĐÚNG! +{pointsToAdd} điểm. Tổng: {r.PlayerScores[ansUser]}");
+                                        }
+                                        else
+                                        {
+                                            Log($"[GAME] {ansUser} SAI! Không có điểm. Tổng: {r.PlayerScores[ansUser]}");
+                                        }
+                                    }
+                                }
+                            }
+                        }
                         break;
                     }
                 }
@@ -411,11 +473,23 @@ namespace GameServer
             try
             {
                 Room room = _roomManager[roomCode];
-                List<string> questions = new List<string>
+                string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                string filePath = System.IO.Path.Combine(baseDir, "Data", $"{room.Subject}.txt");
+
+                List<string> questions = new List<string>();
+                if (System.IO.File.Exists(filePath))
                 {
-                    "What is a water cycle?|A. Bay hơi|B. Mưa|C. Tuần hoàn nước|D. Bão|3",
-                    "1 + 1 bằng mấy?|A. 1|B. 2|C. 3|D. 4|2"
-                };
+                    // Đọc toàn bộ các dòng trong file .txt bỏ vào danh sách
+                    questions = new List<string>(System.IO.File.ReadAllLines(filePath));
+                    Log($"[GAME] Đã nạp thành công {questions.Count} câu hỏi môn {room.Subject} cho phòng {roomCode}");
+                }
+                else
+                {
+                    Log($"[CẢNH BÁO] Không tìm thấy đề thi: {filePath}. Sẽ dùng câu hỏi dự phòng!");
+                    // Câu hỏi backup nếu lỡ quên tạo file .txt
+                    questions.Add("Lỗi không tìm thấy đề thi, vui lòng báo Admin!|A. Ok|B. Dạ|C. Vâng|D. Biết rồi|1");
+                }
+
 
                 for (int i = 0; i < questions.Count; i++)
                 {
@@ -433,20 +507,42 @@ namespace GameServer
                     await Task.Delay(10000);
                     room.IsAcceptingAnswers = false;
 
-                    // Xóa mẹ dòng BroadcastToRoom ANSWER_RESULT và Task.Delay(4000) cũ đi!
-                    // Server giờ không cần khoe đáp án nữa, Unity tự lo.
-
-                    // 4. KIỂM TRA HIỂN THỊ BẢNG XẾP HẠNG (Code cũ)
-                    if ((i + 1) % 5 == 0)
+                    // 4. KIỂM TRA HIỂN THỊ BẢNG XẾP HẠNG MỖI 5 CÂU HOẶC KHI HẾT CÂU HỎI
+                    if ((i + 1) % 5 == 0 || i == questions.Count - 1)
                     {
-                        // ... 
+                        Log($"[GAME] Đang tính toán Bảng Xếp Hạng cho phòng {roomCode}...");
+
+                        // BƯỚC 1: Sắp xếp điểm số từ cao xuống thấp
+                        // Chuyển Dictionary thành danh sách để dễ sort
+                        var sortedScores = room.PlayerScores.OrderByDescending(p => p.Value).ToList();
+
+                        // BƯỚC 2: Gói data thành chuỗi để gửi đi
+                        // Định dạng gửi: LEADERBOARD:Tên1-Điểm1|Tên2-Điểm2|Tên3-Điểm3
+                        List<string> scoreStrings = new List<string>();
+                        foreach (var p in sortedScores)
+                        {
+                            scoreStrings.Add($"{p.Key}:{p.Value}");
+                        }
+
+                        // Nếu phòng chưa ai có điểm (trả lời sai hết), gửi danh sách trống
+                        string leaderboardData = scoreStrings.Count > 0 ? string.Join("|", scoreStrings) : "EMPTY";
+                        string lbPacket = $"LEADERBOARD:{leaderboardData}";
+
+                        // BƯỚC 3: Bắn gói tin Bảng Xếp Hạng cho tất cả Client
+                        BroadcastToRoom(roomCode, lbPacket);
+                        Log($"[GAME] Đã gửi Bảng Xếp Hạng: {lbPacket}");
+
+                        // BƯỚC 4: Dừng 5 giây để Client ngắm Bảng Xếp Hạng trước khi qua câu tiếp theo
                         await Task.Delay(5000);
                     }
-                }
+                } // Kết thúc vòng lặp for (hết câu hỏi)
+
+                // KHI CHẠY XONG HẾT VÒNG LẶP FOR (HẾT ĐỀ THI)
+                BroadcastToRoom(roomCode, "GAME_OVER");
+                Log($"[GAME] Phòng {roomCode} đã kết thúc ván chơi!");
             }
             catch (Exception ex)
             {
-                // NẾU CÓ LỖI, NÓ SẼ IN DÒNG NÀY ĐỎ CHÓT LÊN CONSOLE MÀ KHÔNG BỊ CÂM NÍN NỮA
                 Log($"[LỖI LOOP] {ex.Message} \n {ex.StackTrace}");
             }
         }
