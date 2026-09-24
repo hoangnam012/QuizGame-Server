@@ -474,7 +474,7 @@ namespace GameServer
             {
                 Room room = _roomManager[roomCode];
                 string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-                string filePath = System.IO.Path.Combine(baseDir, "Data", $"{room.Subject}.txt");
+                string filePath = System.IO.Path.Combine(baseDir, "Data", room.ClassName, $"{room.Subject}.txt");
 
                 List<string> questions = new List<string>();
                 if (System.IO.File.Exists(filePath))
