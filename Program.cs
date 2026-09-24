@@ -229,7 +229,7 @@ namespace GameServer
                     {
                         if (client.Client.Poll(0, SelectMode.SelectRead) && client.Client.Available == 0)
                         {
-                            break; 
+                            break;
                         }
                         if (stream.DataAvailable)
                         {
@@ -335,6 +335,9 @@ namespace GameServer
                                     SendToClient(stream, "CREATE_SUCCESS");
                                     row.Cells[6].Value = $"Đang Host phòng: {roomCode}";
                                     Log($"[ROOM] Tạo phòng thành công! Mã: {roomCode} | Host: {hostName}");
+
+                                    string initialPlayerList = string.Join(",", _roomManager[roomCode].Players);
+                                    SendToClient(stream, $"LOBBY_UPDATE:{initialPlayerList}");
                                 }
                             }
                         }
@@ -354,6 +357,11 @@ namespace GameServer
 
                                     row.Cells[6].Value = $"Đang chơi phòng: {roomCode}";
                                     Log($"[ROOM] {row.Cells[1].Value} (IP: {ip}) đã chui vào phòng {roomCode} thành công!");
+
+                                    string playerList = string.Join(",", _roomManager[roomCode].Players);
+
+                                    // Dùng hàm Broadcast có sẵn của ông để réo tên cả phòng
+                                    BroadcastToRoom(roomCode, $"LOBBY_UPDATE:{playerList}");
                                 }
                                 else
                                 {
