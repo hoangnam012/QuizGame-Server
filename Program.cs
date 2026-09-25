@@ -293,15 +293,14 @@ namespace GameServer
                             row.Cells[1].Value = user;
                             Log($"[LOGIN] {user} ({ip}) online.");
 
-                            SendToClient(stream, "LOGIN_SUCCESS"); // Dùng hàm mới rút gọn code!
+                            SendToClient(stream, "LOGIN_SUCCESS"); 
                             Log($"[SERVER -> {user}] Đã phản hồi: LOGIN_SUCCESS");
                         }
-                        // ==========================================
-                        // THÊM MODULE XỬ LÝ TẠO PHÒNG Ở ĐÂY
-                        // ==========================================
+
+                        // Tạo phòng
+
                         else if (msg.StartsWith("CREATE_ROOM:"))
                         {
-                            // msg có dạng: CREATE_ROOM:111222:Lop3:ToanHoc
                             string[] parts = msg.Split(':');
 
                             if (parts.Length == 4)
@@ -310,7 +309,6 @@ namespace GameServer
                                 string className = parts[2];
                                 string subject = parts[3];
 
-                                // 1. Kiểm tra xem mã code này có ai xài chưa
                                 if (_roomManager.ContainsKey(roomCode))
                                 {
                                     SendToClient(stream, "ROOM_EXISTS");
@@ -328,7 +326,7 @@ namespace GameServer
                                         HostIP = ip
                                     };
 
-                                    newRoom.Players.Add(hostName); // Thêm tên host vào danh sách
+                                    newRoom.Players.Add(hostName); 
                                     _roomManager.Add(roomCode, newRoom);
                                     // ====================================================
 
@@ -360,7 +358,6 @@ namespace GameServer
 
                                     string playerList = string.Join(",", _roomManager[roomCode].Players);
 
-                                    // Dùng hàm Broadcast có sẵn của ông để réo tên cả phòng
                                     BroadcastToRoom(roomCode, $"LOBBY_UPDATE:{playerList}");
                                 }
                                 else
@@ -388,19 +385,15 @@ namespace GameServer
                                 string reqCode = msg.Split(':')[1].Trim();
                                 if (_roomManager[reqCode].HostIP == ip)
                                 {
-                                    // Bắn lệnh báo hiệu cho cả phòng biết
                                     BroadcastToRoom(reqCode, $"GAME_STARTED:{reqCode}");
 
-                                    // Chỉ chạy 1 Vòng Lặp duy nhất cho 1 phòng
                                     _ = Task.Run(() => StartGameLoop(reqCode));
 
                                     Log($"[GAME] Host ({ip}) ĐÃ BẮT ĐẦU VÀO TRẬN phòng {reqCode}!");
                                 }
                                 else
                                 {
-                                    // Nếu không phải Host mà dám bấm Play thì block luôn
                                     Log($"[CẢNH BÁO] {ip} bấm Play phòng {reqCode} nhưng KHÔNG PHẢI LÀ HOST!");
-                                    // Nếu thích thì bắn thêm câu chửi về cho nó: SendToClient(stream, "NOT_HOST");
                                 }
                             }
                             catch (Exception ex)
@@ -414,7 +407,6 @@ namespace GameServer
                         }
                         else if (msg.StartsWith("ANSWER:"))
                         {
-                            // msg từ Unity gửi lên có dạng: ANSWER:111111:nam:2
                             string[] parts = msg.Split(':');
                             if (parts.Length == 4)
                             {
@@ -426,19 +418,15 @@ namespace GameServer
                                 {
                                     Room r = _roomManager[ansRoomCode];
 
-                                    // 1. Chỉ nhận đáp án nếu đồng hồ 10s vẫn đang đếm
                                     if (r.IsAcceptingAnswers)
                                     {
-                                        // 2. Tạo giỏ điểm nếu người chơi này chưa có
                                         if (!r.PlayerScores.ContainsKey(ansUser))
                                         {
                                             r.PlayerScores[ansUser] = 0;
                                         }
 
-                                        // 3. SO SÁNH ĐÁP ÁN ĐÚNG/SAI
                                         if (ansIndex.Trim() == r.CurrentAnswer.Trim())
                                         {
-                                            // Tính thời gian chênh lệch để cộng điểm Kahoot
                                             double timeTaken = (DateTime.Now - r.QuestionStartTime).TotalSeconds;
                                             int pointsToAdd = 1000 - (int)(timeTaken * 100);
                                             if (pointsToAdd < 100) pointsToAdd = 100;
@@ -451,7 +439,6 @@ namespace GameServer
                                         {
                                             Log($"[GAME] {ansUser} SAI!");
 
-                                            // SAI CŨNG TRẢ VỀ ĐÁP ÁN ĐÚNG LUÔN, ĐỂ BÊN UNITY CÒN TÔ MÀU ĐỎ NÚT ĐÃ CHỌN!
                                             SendToClient(stream, $"ANSWER_RESULT:{r.CurrentAnswer}");
                                         }
                                     }
@@ -468,7 +455,6 @@ namespace GameServer
             if (!_roomManager.ContainsKey(roomCode)) return;
             List<string> playersInRoom = _roomManager[roomCode].Players;
 
-            // Bắt buộc phải có Invoke để không bị crash ngầm khi đọc DataGridView
             this.Invoke((MethodInvoker)delegate
             {
                 foreach (DataGridViewRow r in dgvClients.Rows)
@@ -497,14 +483,12 @@ namespace GameServer
                 List<string> questions = new List<string>();
                 if (System.IO.File.Exists(filePath))
                 {
-                    // Đọc toàn bộ các dòng trong file .txt bỏ vào danh sách
                     questions = new List<string>(System.IO.File.ReadAllLines(filePath));
                     Log($"[GAME] Đã nạp thành công {questions.Count} câu hỏi môn {room.Subject} cho phòng {roomCode}");
                 }
                 else
                 {
                     Log($"[CẢNH BÁO] Không tìm thấy đề thi: {filePath}. Sẽ dùng câu hỏi dự phòng!");
-                    // Câu hỏi backup nếu lỡ quên tạo file .txt
                     questions.Add("Lỗi không tìm thấy đề thi, vui lòng báo Admin!|A. Ok|B. Dạ|C. Vâng|D. Biết rồi|1");
                 }
 
@@ -516,46 +500,36 @@ namespace GameServer
                     room.QuestionStartTime = DateTime.Now;
                     room.IsAcceptingAnswers = true;
 
-                    // MỚI SỬA: Gửi kèm luôn qData[5] (đáp án đúng) xuống ở cuối gói tin QUESTION
                     string packet = $"QUESTION:{qData[0]}|{qData[1]}|{qData[2]}|{qData[3]}|{qData[4]}|{qData[5]}";
                     BroadcastToRoom(roomCode, packet);
                     Log($"[GAME] Phòng {roomCode} Đang chạy câu {i + 1}");
 
-                    // TRỌNG TÀI BẮT ĐẦU ĐỢI 10 GIÂY
                     await Task.Delay(10000);
                     room.IsAcceptingAnswers = false;
 
-                    // 4. KIỂM TRA HIỂN THỊ BẢNG XẾP HẠNG MỖI 5 CÂU HOẶC KHI HẾT CÂU HỎI
                     if ((i + 1) % 5 == 0 || i == questions.Count - 1)
                     {
                         Log($"[GAME] Đang tính toán Bảng Xếp Hạng cho phòng {roomCode}...");
 
-                        // BƯỚC 1: Sắp xếp điểm số từ cao xuống thấp
-                        // Chuyển Dictionary thành danh sách để dễ sort
                         var sortedScores = room.PlayerScores.OrderByDescending(p => p.Value).ToList();
 
-                        // BƯỚC 2: Gói data thành chuỗi để gửi đi
-                        // Định dạng gửi: LEADERBOARD:Tên1-Điểm1|Tên2-Điểm2|Tên3-Điểm3
                         List<string> scoreStrings = new List<string>();
                         foreach (var p in sortedScores)
                         {
                             scoreStrings.Add($"{p.Key}:{p.Value}");
                         }
 
-                        // Nếu phòng chưa ai có điểm (trả lời sai hết), gửi danh sách trống
                         string leaderboardData = scoreStrings.Count > 0 ? string.Join("|", scoreStrings) : "EMPTY";
                         string lbPacket = $"LEADERBOARD:{leaderboardData}";
 
-                        // BƯỚC 3: Bắn gói tin Bảng Xếp Hạng cho tất cả Client
+
                         BroadcastToRoom(roomCode, lbPacket);
                         Log($"[GAME] Đã gửi Bảng Xếp Hạng: {lbPacket}");
 
-                        // BƯỚC 4: Dừng 5 giây để Client ngắm Bảng Xếp Hạng trước khi qua câu tiếp theo
                         await Task.Delay(5000);
                     }
-                } // Kết thúc vòng lặp for (hết câu hỏi)
+                } 
 
-                // KHI CHẠY XONG HẾT VÒNG LẶP FOR (HẾT ĐỀ THI)
                 BroadcastToRoom(roomCode, "GAME_OVER");
                 Log($"[GAME] Phòng {roomCode} đã kết thúc ván chơi!");
             }
@@ -569,10 +543,9 @@ namespace GameServer
         {
             for (int i = 0; i < dgvClients.Rows.Count; i++)
             {
-                // Chỉ cập nhật row nào đang "Online" của IP đó
                 if (dgvClients.Rows[i].Cells[2].Value.ToString() == ip && dgvClients.Rows[i].Cells[5].Value.ToString() == "Online")
                 {
-                    dgvClients.Rows[i].Cells[4].Value = timeOut; // Cập nhật cột Thời gian ra
+                    dgvClients.Rows[i].Cells[4].Value = timeOut; 
                     dgvClients.Rows[i].Cells[5].Value = "Offline";
                     dgvClients.Rows[i].Cells[6].Value = "Đã ngắt kết nối";
                     dgvClients.Rows[i].DefaultCellStyle.ForeColor = Color.DimGray;
@@ -595,7 +568,6 @@ namespace GameServer
         {
             try
             {
-                // Thêm \n vào cuối để chống dính chùm tin nhắn TCP
                 byte[] data = System.Text.Encoding.UTF8.GetBytes(message + "\n");
                 stream.Write(data, 0, data.Length);
             }

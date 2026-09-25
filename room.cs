@@ -15,7 +15,7 @@ namespace GameServer
         public Dictionary<string, int> PlayerScores { get; set; } = new Dictionary<string, int>();
 
         public int CurrentQuestionIndex { get; set; } = 0;
-        public string CurrentAnswer { get; set; } = "";     // Lưu đáp án đúng của câu hiện tại
+        public string CurrentAnswer { get; set; } = "";   
         public DateTime QuestionStartTime { get; set; }       // Lưu mốc thời gian bắt đầu câu hỏi
         public bool IsAcceptingAnswers { get; set; } = false;
 
