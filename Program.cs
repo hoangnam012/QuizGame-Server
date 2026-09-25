@@ -280,182 +280,180 @@ namespace GameServer
             Log($"[DEBUG] Vừa nhận được từ {ip}: {msg}");
             this.Invoke((MethodInvoker)delegate
             {
-            _msgHandled++;
-            lblMsgCount.Text = _msgHandled.ToString();
+                _msgHandled++;
+                lblMsgCount.Text = _msgHandled.ToString();
 
-            foreach (DataGridViewRow row in dgvClients.Rows)
-            {
-                if (row.Cells[2].Value.ToString() == ip && row.Cells[5].Value.ToString() == "Online")
+                foreach (DataGridViewRow row in dgvClients.Rows)
                 {
-                    if (msg.StartsWith("LOGIN:"))
+                    if (row.Cells[2].Value.ToString() == ip && row.Cells[5].Value.ToString() == "Online")
                     {
-                        string user = msg.Substring(6).Trim();
-                        row.Cells[1].Value = user;
-                        Log($"[LOGIN] {user} ({ip}) online.");
-
-                        SendToClient(stream, "LOGIN_SUCCESS"); // Dùng hàm mới rút gọn code!
-                        Log($"[SERVER -> {user}] Đã phản hồi: LOGIN_SUCCESS");
-                    }
-                    // ==========================================
-                    // THÊM MODULE XỬ LÝ TẠO PHÒNG Ở ĐÂY
-                    // ==========================================
-                    else if (msg.StartsWith("CREATE_ROOM:"))
-                    {
-                        // msg có dạng: CREATE_ROOM:111222:Lop3:ToanHoc
-                        string[] parts = msg.Split(':');
-
-                        if (parts.Length == 4)
+                        if (msg.StartsWith("LOGIN:"))
                         {
-                            string roomCode = parts[1];
-                            string className = parts[2];
-                            string subject = parts[3];
+                            string user = msg.Substring(6).Trim();
+                            row.Cells[1].Value = user;
+                            Log($"[LOGIN] {user} ({ip}) online.");
 
-                            // 1. Kiểm tra xem mã code này có ai xài chưa
-                            if (_roomManager.ContainsKey(roomCode))
-                            {
-                                SendToClient(stream, "ROOM_EXISTS");
-                                Log($"[CẢNH BÁO] {ip} cố tạo phòng {roomCode} nhưng mã này đã tồn tại!");
-                            }
-                            else
-                            {
-                                string hostName = GetUsernameByIP(ip);
+                            SendToClient(stream, "LOGIN_SUCCESS"); // Dùng hàm mới rút gọn code!
+                            Log($"[SERVER -> {user}] Đã phản hồi: LOGIN_SUCCESS");
+                        }
+                        // ==========================================
+                        // THÊM MODULE XỬ LÝ TẠO PHÒNG Ở ĐÂY
+                        // ==========================================
+                        else if (msg.StartsWith("CREATE_ROOM:"))
+                        {
+                            // msg có dạng: CREATE_ROOM:111222:Lop3:ToanHoc
+                            string[] parts = msg.Split(':');
 
-                                Room newRoom = new Room
+                            if (parts.Length == 4)
+                            {
+                                string roomCode = parts[1];
+                                string className = parts[2];
+                                string subject = parts[3];
+
+                                // 1. Kiểm tra xem mã code này có ai xài chưa
+                                if (_roomManager.ContainsKey(roomCode))
                                 {
-                                    RoomCode = roomCode,
-                                    ClassName = className,
-                                    Subject = subject,
-                                    HostIP = ip
-                                };
+                                    SendToClient(stream, "ROOM_EXISTS");
+                                    Log($"[CẢNH BÁO] {ip} cố tạo phòng {roomCode} nhưng mã này đã tồn tại!");
+                                }
+                                else
+                                {
+                                    string hostName = GetUsernameByIP(ip);
 
-                                newRoom.Players.Add(hostName); // Thêm tên host vào danh sách
-                                _roomManager.Add(roomCode, newRoom);
-                                // ====================================================
+                                    Room newRoom = new Room
+                                    {
+                                        RoomCode = roomCode,
+                                        ClassName = className,
+                                        Subject = subject,
+                                        HostIP = ip
+                                    };
 
-                                SendToClient(stream, "CREATE_SUCCESS");
-                                row.Cells[6].Value = $"Đang Host phòng: {roomCode}";
-                                Log($"[ROOM] Tạo phòng thành công! Mã: {roomCode} | Host: {hostName}");
+                                    newRoom.Players.Add(hostName); // Thêm tên host vào danh sách
+                                    _roomManager.Add(roomCode, newRoom);
+                                    // ====================================================
 
-                                string initialPlayerList = string.Join(",", _roomManager[roomCode].Players);
-                                SendToClient(stream, $"LOBBY_UPDATE:{initialPlayerList}");
+                                    SendToClient(stream, "CREATE_SUCCESS");
+                                    row.Cells[6].Value = $"Đang Host phòng: {roomCode}";
+                                    Log($"[ROOM] Tạo phòng thành công! Mã: {roomCode} | Host: {hostName}");
+
+                                    string initialPlayerList = string.Join(",", _roomManager[roomCode].Players);
+                                    SendToClient(stream, $"LOBBY_UPDATE:{initialPlayerList}");
+                                }
                             }
                         }
-                    }
-                    else if (msg.StartsWith("JOIN_ROOM:"))
-                    {
-                        string[] parts = msg.Split(':');
-                        if (parts.Length == 2)
+                        else if (msg.StartsWith("JOIN_ROOM:"))
                         {
-                            string roomCode = parts[1].Trim();
-
-                            if (_roomManager.ContainsKey(roomCode))
+                            string[] parts = msg.Split(':');
+                            if (parts.Length == 2)
                             {
-                                string joinerName = GetUsernameByIP(ip);
-                                _roomManager[roomCode].Players.Add(joinerName);
+                                string roomCode = parts[1].Trim();
 
-                                SendToClient(stream, "JOIN_SUCCESS");
+                                if (_roomManager.ContainsKey(roomCode))
+                                {
+                                    string joinerName = GetUsernameByIP(ip);
+                                    _roomManager[roomCode].Players.Add(joinerName);
 
-                                row.Cells[6].Value = $"Đang chơi phòng: {roomCode}";
-                                Log($"[ROOM] {row.Cells[1].Value} (IP: {ip}) đã chui vào phòng {roomCode} thành công!");
+                                    SendToClient(stream, "JOIN_SUCCESS");
 
-                                string playerList = string.Join(",", _roomManager[roomCode].Players);
+                                    row.Cells[6].Value = $"Đang chơi phòng: {roomCode}";
+                                    Log($"[ROOM] {row.Cells[1].Value} (IP: {ip}) đã chui vào phòng {roomCode} thành công!");
 
-                                // Dùng hàm Broadcast có sẵn của ông để réo tên cả phòng
-                                BroadcastToRoom(roomCode, $"LOBBY_UPDATE:{playerList}");
-                            }
-                            else
-                            {
-                                SendToClient(stream, "ROOM_NOT_FOUND");
-                                Log($"[CẢNH BÁO] {ip} tìm phòng {roomCode} nhưng phòng không tồn tại!");
+                                    string playerList = string.Join(",", _roomManager[roomCode].Players);
+
+                                    // Dùng hàm Broadcast có sẵn của ông để réo tên cả phòng
+                                    BroadcastToRoom(roomCode, $"LOBBY_UPDATE:{playerList}");
+                                }
+                                else
+                                {
+                                    SendToClient(stream, "ROOM_NOT_FOUND");
+                                    Log($"[CẢNH BÁO] {ip} tìm phòng {roomCode} nhưng phòng không tồn tại!");
+                                }
                             }
                         }
-                    }
-                    else if (msg.StartsWith("GET_LOBBY:"))
-                    {
-                        string reqCode = msg.Split(':')[1].Trim();
-                        if (_roomManager.ContainsKey(reqCode))
-                        {
-                            string playerList = string.Join(",", _roomManager[reqCode].Players);
-
-                            SendToClient(stream, $"LOBBY_UPDATE:{playerList}");
-                            Log($"[LOBBY] Đã gửi danh sách người chơi phòng {reqCode} cho {ip}");
-                        }
-                    }
-                    else if (msg.StartsWith("START_GAME:"))
-                    {
-                        try
+                        else if (msg.StartsWith("GET_LOBBY:"))
                         {
                             string reqCode = msg.Split(':')[1].Trim();
-                            if (_roomManager[reqCode].HostIP == ip)
+                            if (_roomManager.ContainsKey(reqCode))
                             {
-                                // Bắn lệnh báo hiệu cho cả phòng biết
-                                BroadcastToRoom(reqCode, $"GAME_STARTED:{reqCode}");
+                                string playerList = string.Join(",", _roomManager[reqCode].Players);
 
-                                // Chỉ chạy 1 Vòng Lặp duy nhất cho 1 phòng
-                                _ = Task.Run(() => StartGameLoop(reqCode));
-
-                                Log($"[GAME] Host ({ip}) ĐÃ BẮT ĐẦU VÀO TRẬN phòng {reqCode}!");
-                            }
-                            else
-                            {
-                                // Nếu không phải Host mà dám bấm Play thì block luôn
-                                Log($"[CẢNH BÁO] {ip} bấm Play phòng {reqCode} nhưng KHÔNG PHẢI LÀ HOST!");
-                                // Nếu thích thì bắn thêm câu chửi về cho nó: SendToClient(stream, "NOT_HOST");
+                                SendToClient(stream, $"LOBBY_UPDATE:{playerList}");
+                                Log($"[LOBBY] Đã gửi danh sách người chơi phòng {reqCode} cho {ip}");
                             }
                         }
-                        catch (Exception ex)
+                        else if (msg.StartsWith("START_GAME:"))
                         {
-                            Log($"[LỖI START_GAME] {ex.Message}");
-                        }
-                    }
-                    else if (msg.StartsWith("ACTION:"))
-                    {
-                        row.Cells[6].Value = msg.Substring(7).Trim();
-                    }
-                    else if (msg.StartsWith("ANSWER:"))
-                    {
-                        // msg từ Unity gửi lên có dạng: ANSWER:111111:nam:2
-                        string[] parts = msg.Split(':');
-                        if (parts.Length == 4)
-                        {
-                            string ansRoomCode = parts[1];
-                            string ansUser = parts[2];
-                            string ansIndex = parts[3];
-
-                            if (_roomManager.ContainsKey(ansRoomCode))
+                            try
                             {
-                                Room r = _roomManager[ansRoomCode];
-
-                                // 1. Chỉ nhận đáp án nếu đồng hồ 10s vẫn đang đếm
-                                if (r.IsAcceptingAnswers)
+                                string reqCode = msg.Split(':')[1].Trim();
+                                if (_roomManager[reqCode].HostIP == ip)
                                 {
-                                    // 2. Tạo giỏ điểm nếu người chơi này chưa có
-                                    if (!r.PlayerScores.ContainsKey(ansUser))
-                                    {
-                                        r.PlayerScores[ansUser] = 0;
-                                    }
+                                    // Bắn lệnh báo hiệu cho cả phòng biết
+                                    BroadcastToRoom(reqCode, $"GAME_STARTED:{reqCode}");
 
-                                    // 3. SO SÁNH ĐÁP ÁN ĐÚNG/SAI
-                                    if (ansIndex.Trim() == r.CurrentAnswer.Trim())
-                                    {
-                                        // Tính thời gian chênh lệch để cộng điểm Kahoot
-                                        double timeTaken = (DateTime.Now - r.QuestionStartTime).TotalSeconds;
-                                        int pointsToAdd = 1000 - (int)(timeTaken * 100);
-                                        if (pointsToAdd < 100) pointsToAdd = 100;
+                                    // Chỉ chạy 1 Vòng Lặp duy nhất cho 1 phòng
+                                    _ = Task.Run(() => StartGameLoop(reqCode));
 
-                                        r.PlayerScores[ansUser] += pointsToAdd;
-                                        Log($"[GAME] {ansUser} ĐÚNG! +{pointsToAdd} điểm. Tổng: {r.PlayerScores[ansUser]}");
-                                        SendToClient(stream, $"ANSWER_RESULT:CORRECT:{pointsToAdd}");
-                                    }
-                                    else
-                                    {
-                                        Log($"[GAME] {ansUser} SAI! Không có điểm. Tổng: {r.PlayerScores[ansUser]}");
+                                    Log($"[GAME] Host ({ip}) ĐÃ BẮT ĐẦU VÀO TRẬN phòng {reqCode}!");
+                                }
+                                else
+                                {
+                                    // Nếu không phải Host mà dám bấm Play thì block luôn
+                                    Log($"[CẢNH BÁO] {ip} bấm Play phòng {reqCode} nhưng KHÔNG PHẢI LÀ HOST!");
+                                    // Nếu thích thì bắn thêm câu chửi về cho nó: SendToClient(stream, "NOT_HOST");
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Log($"[LỖI START_GAME] {ex.Message}");
+                            }
+                        }
+                        else if (msg.StartsWith("ACTION:"))
+                        {
+                            row.Cells[6].Value = msg.Substring(7).Trim();
+                        }
+                        else if (msg.StartsWith("ANSWER:"))
+                        {
+                            // msg từ Unity gửi lên có dạng: ANSWER:111111:nam:2
+                            string[] parts = msg.Split(':');
+                            if (parts.Length == 4)
+                            {
+                                string ansRoomCode = parts[1];
+                                string ansUser = parts[2];
+                                string ansIndex = parts[3];
 
-                                        // ==========================================
-                                        // THÊM DÒNG NÀY: Báo tin buồn về cho riêng người vừa bấm
-                                        // ==========================================
-                                        SendToClient(stream, "ANSWER_RESULT:WRONG:0");
-                                    }
+                                if (_roomManager.ContainsKey(ansRoomCode))
+                                {
+                                    Room r = _roomManager[ansRoomCode];
+
+                                    // 1. Chỉ nhận đáp án nếu đồng hồ 10s vẫn đang đếm
+                                    if (r.IsAcceptingAnswers)
+                                    {
+                                        // 2. Tạo giỏ điểm nếu người chơi này chưa có
+                                        if (!r.PlayerScores.ContainsKey(ansUser))
+                                        {
+                                            r.PlayerScores[ansUser] = 0;
+                                        }
+
+                                        // 3. SO SÁNH ĐÁP ÁN ĐÚNG/SAI
+                                        if (ansIndex.Trim() == r.CurrentAnswer.Trim())
+                                        {
+                                            // Tính thời gian chênh lệch để cộng điểm Kahoot
+                                            double timeTaken = (DateTime.Now - r.QuestionStartTime).TotalSeconds;
+                                            int pointsToAdd = 1000 - (int)(timeTaken * 100);
+                                            if (pointsToAdd < 100) pointsToAdd = 100;
+
+                                            r.PlayerScores[ansUser] += pointsToAdd;
+                                            Log($"[GAME] {ansUser} ĐÚNG! +{pointsToAdd} điểm. Tổng: {r.PlayerScores[ansUser]}");
+                                            SendToClient(stream, $"ANSWER_RESULT:{r.CurrentAnswer}");
+                                        }
+                                        else
+                                        {
+                                            Log($"[GAME] {ansUser} SAI!");
+
+                                            // SAI CŨNG TRẢ VỀ ĐÁP ÁN ĐÚNG LUÔN, ĐỂ BÊN UNITY CÒN TÔ MÀU ĐỎ NÚT ĐÃ CHỌN!
+                                            SendToClient(stream, $"ANSWER_RESULT:{r.CurrentAnswer}");
+                                        }
                                     }
                                 }
                             }
